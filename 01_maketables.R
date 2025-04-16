@@ -42,7 +42,7 @@ for (x in out) {
 
 
 # Save main DD results to a .tex file using stargazer
-stargazer(results, type = "latex", out = file.path(MY_TAB, "main.tex"), star.cutoffs = c(0.01, 0.05, 0.10))
+stargazer(results, type = "latex", out = file.path(MY_TAB, "main.tex"), star.cutoffs = c(0.1, 0.05, 0.01))
 
 
 # Table 3: Sports Club Membership Across Child Ages
@@ -53,7 +53,7 @@ for (x in c("ll6", "ll7", "ll8", "ll9", "ll10", "ll11", "ll12")) {
 }
 
 # Save sports club membership results to a .tex file using stargazer
-stargazer(results_age, type = "latex", out = file.path(MY_TAB, "main_parents2.tex"), star.cutoffs = c(0.01, 0.05, 0.10))
+stargazer(results_age, type = "latex", out = file.path(MY_TAB, "main_parents2.tex"), star.cutoffs = c(0.1, 0.05, 0.01))
 
 
 # Table 4: Robustness
@@ -73,7 +73,7 @@ for (x in out) {
 }
 
 # Save robustness results to a .tex file using stargazer
-stargazer(robust_results, type = "latex", out = file.path(MY_TAB, "robust_p1.tex"), star.cutoffs = c(0.01, 0.05, 0.10))
+stargazer(robust_results, type = "latex", out = file.path(MY_TAB, "robust_p1.tex"), star.cutoffs = c(0.1, 0.05, 0.01))
 
 
 # Additional tables and analyses can be translated similarly...
