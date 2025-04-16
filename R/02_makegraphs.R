@@ -6,6 +6,9 @@ library(tidyr)
 
 setwd(getwd())
 
+# Load data
+data <- read_dta(file.path(DATA_IN, "MSZ_main-data.dta"))
+
 # Setting the specification
 sample <- "bula_3rd %in% c(4, 13, 16) & target == 1 & nonmiss == 1"
 yrs <- "year_3rd >= 2006 & year_3rd <= 2010"
@@ -23,8 +26,7 @@ fe1 <- c("year_1st", "bula_1st", "cityno")
 fe_now <- c("year_3rd", "bula", "cityno")
 age <- "age >= 5 & age <= 12"
 
-# Load data
-data <- read_dta(file.path(DATA_IN, "MSZ_main-data.dta"))
+
 
 # Graphs: Main
 
@@ -44,7 +46,7 @@ for (x in out) {
     scale_color_manual(values = c("black", "grey")) +
     labs(title = paste("DiD_", x), x = "", y = "Percent") +
     theme_minimal() +
-    ggsave(paste0("$MY_TAB/DiD_", x, ".pdf"))
+    ggsave(paste0("results/DiD_", x, ".pdf"))
   data[[x]] <- data[[x]] / 100
 }
 
@@ -87,7 +89,7 @@ ggplot(data, aes(x = age, y = LL_sport, color = factor(tbula))) +
   scale_color_manual(values = c("black", "grey")) +
   labs(title = "DiD_alt1", x = "Age", y = "Percent") +
   theme_minimal() +
-  ggsave("$MY_TAB/DiD_alt1.pdf")
+  ggsave("results/DiD_alt1.pdf")
 
 ggplot(data, aes(x = age, y = LL_sport, color = factor(tbula))) +
   geom_point() +
@@ -95,7 +97,7 @@ ggplot(data, aes(x = age, y = LL_sport, color = factor(tbula))) +
   scale_color_manual(values = c("black", "grey")) +
   labs(title = "DiD_alt2", x = "Age", y = "Percent") +
   theme_minimal() +
-  ggsave("$MY_TAB/DiD_alt2.pdf")
+  ggsave("results/DiD_alt2.pdf")
 
 
 # Figure 5: Suggestive Evidence on Mechanisms
@@ -105,28 +107,28 @@ ggplot(data %>% filter(eval(parse(text = sample))) %>% filter(eval(parse(text = 
   geom_bar() +
   labs(title = "Tried new sport discipline(s)", y = "Percent") +
   theme_minimal() +
-  ggsave("$MY_TAB/bar_579_en.pdf")
+  ggsave("results/bar_579_en.pdf")
 
 # b) Could redeem the voucher for desired discipline
 ggplot(data %>% filter(eval(parse(text = sample))) %>% filter(eval(parse(text = yrs))) %>% filter(bula_3rd == 13), aes(x = factor(favsport))) +
   geom_bar() +
   labs(title = "Could redeem the voucher for desired discipline", y = "Percent") +
   theme_minimal() +
-  ggsave("$MY_TAB/bar_561_en.pdf")
+  ggsave("results/bar_561_en.pdf")
 
 # c) Could not afford membership w/o voucher
 ggplot(data %>% filter(eval(parse(text = sample))) %>% filter(eval(parse(text = yrs))) %>% filter(bula_3rd == 13), aes(x = factor(v_582))) +
   geom_bar() +
   labs(title = "Could not afford membership w/o voucher", y = "Percent") +
   theme_minimal() +
-  ggsave("$MY_TAB/bar_582_en.pdf")
+  ggsave("results/bar_582_en.pdf")
 
 # d) Parents happy to save money b/c of voucher
 ggplot(data %>% filter(eval(parse(text = sample))) %>% filter(eval(parse(text = yrs))) %>% filter(bula_3rd == 13), aes(x = factor(v_583))) +
   geom_bar() +
   labs(title = "Parents happy to save money b/c of voucher", y = "Percent") +
   theme_minimal() +
-  ggsave("$MY_TAB/bar_583_en.pdf")
+  ggsave("results/bar_583_en.pdf")
 
 # e) Transport as a supply-side barrier
 transport_data <- data %>% filter(v_566 != 1) %>% summarize(across(v_562:v_565, mean))
@@ -136,7 +138,7 @@ ggplot(transport_data_long, aes(x = transport_mode, y = mean_value)) +
   scale_x_discrete(labels = c("Foot", "Bike", "Public transport", "Driven by parents")) +
   labs(title = "Transport as a supply-side barrier", y = "Share") +
   theme_minimal() +
-  ggsave("$MY_TAB/transportation.pdf")
+  ggsave("results/transportation.pdf")
 
 # f) Mode of Transportation (Urban vs. Rural)
 transport_data_urban <- data %>% filter(v_566 != 1) %>% group_by(urban) %>% summarize(across(v_562:v_565, mean))
@@ -147,7 +149,7 @@ ggplot(transport_data_urban_long, aes(x = transport_mode, y = mean_value, fill =
   scale_fill_manual(values = c("grey", "black"), labels = c("Rural", "Urban")) +
   labs(title = "Mode of Transportation (Urban vs. Rural)", y = "Share") +
   theme_minimal() +
-  ggsave("$MY_TAB/transportation2.pdf")
+  ggsave("results/transportation2.pdf")
 
 # Figure 6: Supply-Side Restrictions? Number of Sports Clubs per ZIP Code
 ggplot(data %>% filter(eval(parse(text = sample))) %>% filter(eval(parse(text = yrs))) %>% filter(tbula_3rd == 1 & bula == 13 & !is.na(einwohner)), aes(x = factor(vereine_cat))) +
@@ -155,14 +157,14 @@ ggplot(data %>% filter(eval(parse(text = sample))) %>% filter(eval(parse(text = 
   scale_x_discrete(labels = c("0", "1-5", "6-10", "11-15", "16-20", "21-30", "31-40", ">40")) +
   labs(title = "Sports clubs per ZIP code", y = "Proportion") +
   theme_minimal() +
-  ggsave("$MY_TAB/clubs.pdf")
+  ggsave("results/clubs.pdf")
 
 ggplot(data %>% filter(eval(parse(text = sample))) %>% filter(eval(parse(text = yrs))) %>% filter(tbula_3rd == 1 & bula == 13 & !is.na(einwohner)), aes(x = factor(sparten_cat))) +
   geom_histogram(binwidth = 1) +
   scale_x_discrete(labels = c("0", "1-10", "11-20", "21-30", "31-40", "41-50", "51-60", ">60")) +
   labs(title = "Sports club disciplines per ZIP code", y = "Proportion") +
   theme_minimal() +
-  ggsave("$MY_TAB/divisions.pdf")
+  ggsave("results/divisions.pdf")
 
 # Figure 7: Further Outcomes
 # a) Placebo Outcomes
@@ -199,7 +201,7 @@ ggplot(data %>% filter(eval(parse(text = sample))) %>% filter(eval(parse(text = 
   geom_histogram() +
   labs(title = "Duration of survey in our sample", y = "Frequency") +
   theme_minimal() +
-  ggsave("$MY_TAB/hist_dur.pdf")
+  ggsave("results/hist_dur.pdf")
 
 # Figure B1: Sports Disciplines for which Vouchers Were Redeemed
 table(data$v_560_2)
