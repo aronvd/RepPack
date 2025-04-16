@@ -3,211 +3,319 @@ library(dplyr)
 library(ggplot2)
 library(foreign)
 library(tidyr)
+library(dplyr)
+library(broom)
 
 setwd(getwd())
 
 # Load data
 data <- read_dta(file.path(DATA_IN, "MSZ_main-data.dta"))
 
-# Setting the specification
-sample <- "bula_3rd %in% c(4, 13, 16) & target == 1 & nonmiss == 1"
-yrs <- "year_3rd >= 2006 & year_3rd <= 2010"
-vce <- "cityno"
-
-# Outcomes
+# Préambule : Génération des variables nécessaires
+sample <- data %>% filter(bula_3rd %in% c(4, 13, 16) & target == 1 & nonmiss == 1)
+yrs <- data %>% filter(year_3rd >= 2006 & year_3rd <= 2010)
 out <- c("kommheard", "kommgotten", "kommused", "sportsclub", "sport_hrs", "oweight")
 
-# Further
-controls <- c("female", "siblings", "born_germany", "parent_nongermany", "newspaper", "art_at_home", "academictrack", "sportsclub_4_7", "music_4_7")
-further <- c("sport1hrs", "sport2hrs", "sport3hrs", "sport_alt2", "health1", "obese", "eversmoked", "currentsmoking", "everalc", "alclast7")
-hte <- c("female", "urban", "newspaper", "art_at_home", "academictrack", "sportsclub_4_7")
-fe3 <- c("year_3rd", "bula_3rd", "cityno")
-fe1 <- c("year_1st", "bula_1st", "cityno")
-fe_now <- c("year_3rd", "bula", "cityno")
-age <- "age >= 5 & age <= 12"
+# Figure 1 : Développement des variables de résultat dans les états de traitement et de contrôle
+library(ggplot2)
 
-
-
-# Graphs: Main
-
-# Figure 1: Development of Outcome Variables in Treatment and Control States across Cohorts
-data <- data %>%
-  mutate(cnt = 1) %>%
+data %>%
+  filter(year_3rd >= 2006 & year_3rd <= 2010) %>%
   group_by(tbula_3rd, year_3rd) %>%
-  summarize(across(all_of(out), mean), treat = mean(treat), cnt = sum(cnt))
-
-years <- c("2006/07", "2007/08", "2008/09", "2009/10", "2010/11", "2011/12")
-
-for (x in out) {
-  data[[x]] <- data[[x]] * 100
-  ggplot(data, aes(x = year_3rd, y = !!sym(x), color = factor(tbula))) +
-    geom_point() +
-    geom_line() +
-    scale_color_manual(values = c("black", "grey")) +
-    labs(title = paste("DiD_", x), x = "", y = "Percent") +
-    theme_minimal() +
-    ggsave(paste0("results/DiD_", x, ".pdf"))
-  data[[x]] <- data[[x]] / 100
-}
-
-# Figure 2: Effect Heterogeneity
-for (x in out) {
-  for (group in hte) {
-    data <- data %>%
-      mutate(tXgroup = treat * !!sym(group))
-    model <- lm(as.formula(paste(x, "~ treat + tXgroup + year_3rd *", group, "+ bula_3rd *", group, "+ cityno *", group)), data = data)
-    summary(model)
-    data <- data %>%
-      select(-tXgroup)
-  }
-}
-
-# Figure 3: Heterogeneity across Cohorts
-for (x in out) {
-  model <- lm(as.formula(paste(x, "~ t_2008 + t_2009 + t_2010 + year_3rd + bula_3rd + cityno")), data = data)
-  summary(model)
-}
-
-# Figure 4: Sports Club Membership by Age
-data <- data %>%
-  filter(eval(parse(text = sample))) %>%
-  filter(eval(parse(text = yrs))) %>%
-  select(starts_with("LL_sport"), kommheard, kommgotten, sportsclub, treat, bula_3rd, bula, year_3rd, cityno) %>%
-  mutate(id = row_number()) %>%
-  pivot_longer(cols = starts_with("LL_sport"), names_to = "age", values_to = "LL_sport") %>%
-  mutate(tyear = year_3rd >= 2008 & year_3rd <= 2010,
-         tbula = bula_3rd == 13,
-         cnt = 1) %>%
-  filter(eval(parse(text = age))) %>%
-  group_by(tbula, tyear, age) %>%
-  summarize(across(c(LL_sport, kommheard, kommgotten, treat, sportsclub), mean), cnt = sum(cnt))
-
-data$LL_sport <- data$LL_sport * 100
-ggplot(data, aes(x = age, y = LL_sport, color = factor(tbula))) +
+  summarise(across(all_of(out), mean, na.rm = TRUE), treat = mean(treat, na.rm = TRUE)) %>%
+  pivot_longer(cols = all_of(out), names_to = "variable", values_to = "value") %>%
+  ggplot(aes(x = year_3rd, y = value, color = factor(tbula_3rd))) +
   geom_point() +
   geom_line() +
-  scale_color_manual(values = c("black", "grey")) +
-  labs(title = "DiD_alt1", x = "Age", y = "Percent") +
+  facet_wrap(~ variable, scales = "free_y") +
+  labs(x = "", y = "Percent", color = "State") +
   theme_minimal() +
   ggsave("results/DiD_alt1.pdf")
 
-ggplot(data, aes(x = age, y = LL_sport, color = factor(tbula))) +
+# Figure 2 : Hétérogénéité des effets
+hte <- c("female", "urban", "newspaper", "art_at_home", "academictrack", "sportsclub_4_7")
+
+for (var in out) {
+  for (group in hte) {
+    model <- lm(as.formula(paste(var, "~ treat *", group, "+ year_3rd + bula_3rd + cityno")), data = sample)
+    summary(model)
+  }
+}
+
+# Figure 3 : Hétérogénéité entre cohortes
+for (var in out) {
+  model <- lm(as.formula(paste(var, "~ t_2008 + t_2009 + t_2010 + year_3rd + bula_3rd + cityno")), data = sample)
+  summary(model)
+}
+
+# Figure 4 : Adhésion au club de sport par âge
+
+sample <- data %>% filter(bula_3rd %in% c(4, 13, 16) & target == 1 & nonmiss == 1)
+yrs <- sample %>% filter(year_3rd >= 2006 & year_3rd <= 2010)
+
+data_filtered <- yrs %>% select(starts_with("LL_sport"), kommheard, kommgotten, sportsclub, treat, bula_3rd, bula, year_3rd, cityno)
+data_filtered <- data_filtered %>% mutate(id = row_number())
+
+
+# Reshape data to long format and extract numeric part of LL_sport column names as age
+data_long <- data_filtered %>% pivot_longer(
+  cols = starts_with("LL_sport"),
+  names_to = "age",
+  values_to = "LL_sport",
+  names_transform = list(age = ~ as.numeric(gsub("LL_sport", "", .)))
+)
+
+
+# Generate tyear and tbula columns
+
+data_long <- data_long %>% mutate(
+  tyear = ifelse(year_3rd >= 2008 & year_3rd <= 2010, 1, 0),
+  tbula = ifelse(bula_3rd == 13, 1, 0),
+  cnt = 1
+)
+
+# Filter based on age
+data_long <- data_long %>% filter(age >= 5 & age <= 12)
+
+# Check the filtered data
+print(head(data_long))
+
+# Collapse data by tbula, tyear, and age
+data_collapsed <- data_long %>% group_by(tbula, tyear, age) %>% summarise(
+  LL_sport = mean(LL_sport, na.rm = TRUE) * 100,
+  kommheard = mean(kommheard, na.rm = TRUE),
+  kommgotten = mean(kommgotten, na.rm = TRUE),
+  treat = mean(treat, na.rm = TRUE),
+  sportsclub = mean(sportsclub, na.rm = TRUE),
+  cnt = sum(cnt)
+)
+
+
+# Plot Figure 4 without faceting
+
+ggplot(data_collapsed, aes(x = age, y = LL_sport, color = factor(tbula))) +
   geom_point() +
   geom_line() +
-  scale_color_manual(values = c("black", "grey")) +
-  labs(title = "DiD_alt2", x = "Age", y = "Percent") +
+  facet_wrap(~ tyear, scales = "free_y") +
+  labs(x = "Age", y = "Percent", color = "State") +
   theme_minimal() +
-  ggsave("results/DiD_alt2.pdf")
+  ggsave("results/DiD_fig4.pdf")
 
 
-# Figure 5: Suggestive Evidence on Mechanisms
+#Table 5 : Suggestive envidence mechanism
 
-# a) Tried new sport discipline(s)
-ggplot(data %>% filter(eval(parse(text = sample))) %>% filter(eval(parse(text = yrs))) %>% filter(bula_3rd == 13), aes(x = factor(v_579))) +
-  geom_bar() +
-  labs(title = "Tried new sport discipline(s)", y = "Percent") +
+sample_data <- data %>% filter(bula_3rd == 13 & bula_3rd %in% c(4, 13, 16) & target == 1 & nonmiss == 1 & year_3rd >= 2006 & year_3rd <= 2010)
+
+##5.1 New sport dscipline
+
+ggplot(sample_data, aes(x = factor(v_579))) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "black") +
+  labs(y = "Percent", x = "Tried new sport discipline(s)") +
   theme_minimal() +
-  ggsave("results/bar_579_en.pdf")
+  ggsave("results/bar_5.1_en.pdf")
 
-# b) Could redeem the voucher for desired discipline
-ggplot(data %>% filter(eval(parse(text = sample))) %>% filter(eval(parse(text = yrs))) %>% filter(bula_3rd == 13), aes(x = factor(favsport))) +
-  geom_bar() +
-  labs(title = "Could redeem the voucher for desired discipline", y = "Percent") +
+##5.2 Could redeem for desired discipline
+
+# Plot
+ggplot(sample_data, aes(x = factor(favsport))) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "black") +
+  labs(y = "Percent", x = "Could redeem the voucher for desired discipline") +
   theme_minimal() +
-  ggsave("results/bar_561_en.pdf")
+  ggsave("results/bar_5.2_en.pdf")
 
-# c) Could not afford membership w/o voucher
-ggplot(data %>% filter(eval(parse(text = sample))) %>% filter(eval(parse(text = yrs))) %>% filter(bula_3rd == 13), aes(x = factor(v_582))) +
-  geom_bar() +
-  labs(title = "Could not afford membership w/o voucher", y = "Percent") +
+
+##5.3 Could not afford without voucher
+
+ggplot(sample_data, aes(x = factor(v_582))) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "black") +
+  labs(y = "Percent", x = "Could not afford membership w/o voucher") +
   theme_minimal() +
-  ggsave("results/bar_582_en.pdf")
+  ggsave("results/bar_5.3_en.pdf")
 
-# d) Parents happy to save money b/c of voucher
-ggplot(data %>% filter(eval(parse(text = sample))) %>% filter(eval(parse(text = yrs))) %>% filter(bula_3rd == 13), aes(x = factor(v_583))) +
-  geom_bar() +
-  labs(title = "Parents happy to save money b/c of voucher", y = "Percent") +
+##5.4 Parents happy to save money
+
+# Plot
+ggplot(sample_data, aes(x = factor(v_583))) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "black") +
+  labs(y = "Percent", x = "Parents happy to save money b/c of voucher") +
   theme_minimal() +
-  ggsave("results/bar_583_en.pdf")
+  ggsave("results/bar_5.4_en.pdf")
 
-# e) Transport as a supply-side barrier
-transport_data <- data %>% filter(v_566 != 1) %>% summarize(across(v_562:v_565, mean))
-transport_data_long <- transport_data %>% pivot_longer(cols = everything(), names_to = "transport_mode", values_to = "mean_value")
-ggplot(transport_data_long, aes(x = transport_mode, y = mean_value)) +
-  geom_bar(stat = "identity") +
+
+###Transport do not work yet
+
+##5.5 Transport as supply side barrier
+
+transport_data <- data %>% filter(v_566 != 1)
+
+# Plot
+ggplot(transport_data, aes(x = factor(variable), y = value)) +
+  geom_bar(stat = "identity", position = "dodge", fill = "black") +
   scale_x_discrete(labels = c("Foot", "Bike", "Public transport", "Driven by parents")) +
-  labs(title = "Transport as a supply-side barrier", y = "Share") +
+  labs(y = "Share", x = "Mode of Transportation") +
   theme_minimal() +
   ggsave("results/transportation.pdf")
 
-# f) Mode of Transportation (Urban vs. Rural)
-transport_data_urban <- data %>% filter(v_566 != 1) %>% group_by(urban) %>% summarize(across(v_562:v_565, mean))
-transport_data_urban_long <- transport_data_urban %>% pivot_longer(cols = -urban, names_to = "transport_mode", values_to = "mean_value")
-ggplot(transport_data_urban_long, aes(x = transport_mode, y = mean_value, fill = factor(urban))) +
+##5.6 Rural or urban mode of transport 
+
+ggplot(transport_data, aes(x = factor(urban), y = value, fill = factor(variable))) +
   geom_bar(stat = "identity", position = "dodge") +
-  scale_x_discrete(labels = c("Foot", "Bike", "Public transport", "Driven by parents")) +
-  scale_fill_manual(values = c("grey", "black"), labels = c("Rural", "Urban")) +
-  labs(title = "Mode of Transportation (Urban vs. Rural)", y = "Share") +
+  scale_x_discrete(labels = c("Rural", "Urban")) +
+  scale_fill_manual(values = c("black", "gray", "darkgray", "lightgray"), labels = c("Foot", "Bike", "Public transport", "Driven by parents")) +
+  labs(y = "Share", x = "Mode of Transportation") +
   theme_minimal() +
   ggsave("results/transportation2.pdf")
 
-# Figure 6: Supply-Side Restrictions? Number of Sports Clubs per ZIP Code
-ggplot(data %>% filter(eval(parse(text = sample))) %>% filter(eval(parse(text = yrs))) %>% filter(tbula_3rd == 1 & bula == 13 & !is.na(einwohner)), aes(x = factor(vereine_cat))) +
-  geom_histogram(binwidth = 1) +
-  scale_x_discrete(labels = c("0", "1-5", "6-10", "11-15", "16-20", "21-30", "31-40", ">40")) +
-  labs(title = "Sports clubs per ZIP code", y = "Proportion") +
+#6 : Figure 6: Supply-Side Restrictions? Number of Sports Clubs per ZIP Code
+
+# Filter data
+clubs_data <- data %>% filter(tbula_3rd == 1 & bula == 13 & !is.na(einwohner) & bula_3rd %in% c(4, 13, 16) & target == 1 & nonmiss == 1 & year_3rd >= 2006 & year_3rd <= 2010)
+
+# Plot
+
+
+##6.1 Number of Sports Clubs per ZIP Code
+ggplot(clubs_data, aes(x = vereine_cat)) +
+  geom_histogram(binwidth = 1, fill = "black", aes(y = ..density..)) +
+  scale_x_continuous(breaks = 0:7, labels = c("0", "1-5", "6-10", "11-15", "16-20", "21-30", "31-40", ">40")) +
+  labs(y = "Proportion", x = "Sports clubs per ZIP code") +
   theme_minimal() +
   ggsave("results/clubs.pdf")
+##6.2 Sports Club Disciplines per ZIP Code
 
-ggplot(data %>% filter(eval(parse(text = sample))) %>% filter(eval(parse(text = yrs))) %>% filter(tbula_3rd == 1 & bula == 13 & !is.na(einwohner)), aes(x = factor(sparten_cat))) +
-  geom_histogram(binwidth = 1) +
-  scale_x_discrete(labels = c("0", "1-10", "11-20", "21-30", "31-40", "41-50", "51-60", ">60")) +
-  labs(title = "Sports club disciplines per ZIP code", y = "Proportion") +
+# Plot
+ggplot(clubs_data, aes(x = sparten_cat)) +
+  geom_histogram(binwidth = 1, fill = "black", aes(y = ..density..)) +
+  scale_x_continuous(breaks = 0:7, labels = c("0", "1-10", "11-20", "21-30", "31-40", "41-50", "51-60", ">60")) +
+  labs(y = "Proportion", x = "Sports club disciplines per ZIP code") +
   theme_minimal() +
   ggsave("results/divisions.pdf")
 
-# Figure 7: Further Outcomes
-# a) Placebo Outcomes
-for (x in controls) {
-  data <- data %>% mutate(treat_x = treat)
-  model <- lm(as.formula(paste(x, "~ treat_x +", paste(fe3, collapse = " + "), "+ cityno")), data = data %>% filter(eval(parse(text = sample))) %>% filter(eval(parse(text = yrs))))
-  summary(model)
-  data <- data %>% select(-treat_x)
+#7 Figure 7: Further Outcomes
+
+# Load necessary libraries
+
+# Filter data
+
+sample_data <- data %>% filter(bula_3rd %in% c(4, 13, 16) & target == 1 & nonmiss == 1 & year_3rd >= 2006 & year_3rd <= 2010)
+
+# Placebo Outcomes
+placebo_results <- list()
+controls <- c("female", "siblings", "born_germany", "parent_nongermany", "newspaper", "art_at_home", "academictrack", "sportsclub_4_7", "music_4_7")
+
+for (control in controls) {
+  sample_data <- sample_data %>% mutate(treat_temp = treat)
+  model <- lm(as.formula(paste(control, "~ treat_temp + year_3rd + bula_3rd + cityno")), data = sample_data)
+  placebo_results[[control]] <- tidy(model, conf.int = TRUE)
+  sample_data <- sample_data %>% mutate(treat = treat_temp)
 }
 
-# b) Additional outcomes
-for (x in further) {
-  data <- data %>% mutate(treat_x = treat)
-  model <- lm(as.formula(paste(x, "~ treat_x +", paste(fe3, collapse = " + "), "+ cityno")), data = data %>% filter(eval(parse(text = sample))) %>% filter(eval(parse(text = yrs))))
-  summary(model)
-  data <- data %>% select(-treat_x)
+placebo_df <- bind_rows(placebo_results, .id = "control")
+
+
+
+##7.1 a) Placebo Outcomes
+
+# Plot
+
+ggplot(placebo_df, aes(x = control, y = estimate, ymin = conf.low, ymax = conf.high)) +
+  geom_pointrange() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(x = "Control Variables", y = "Estimate") +
+  theme_minimal() +
+  ggsave("results/placebo.pdf")
+
+### DOES NOT WORK YET EITHER 7.2 b) Additional Outcomes
+
+sample_data <- data %>% filter(bula_3rd %in% c(4, 13, 16) & target == 1 & nonmiss == 1 & year_3rd >= 2006 & year_3rd <= 2010)
+
+# Additional Outcomes
+additional_results <- list()
+further <- c("Does_sport", "At_least_2_hrs_sports_week", "At_least_3_hrs_sports_week", 
+    "Sport_is_important", "Very_good_health", "Overweight_BMI_25", 
+    "Ever_smoked_cigarettes", "Current_smoker", "Ever_consumed_alcohol", 
+    "Consumed_alcohol_in_last_7_days")
+
+
+for (outcome in further) {
+  sample_data <- sample_data %>% mutate(treat_temp = treat)
+  model <- lm(as.formula(paste(outcome, "~ treat_temp + year_3rd + bula_3rd + cityno")), data = sample_data)
+  additional_results[[outcome]] <- tidy(model, conf.int = TRUE)
+  sample_data <- sample_data %>% mutate(treat = treat_temp)
 }
 
-# Graphs: Appendix
+additional_df <- bind_rows(additional_results, .id = "outcome")
+
+##7.1 b) Additional Outcomes
+
+# Plot
+ggplot(additional_df, aes(x = outcome, y = estimate, ymin = conf.low, ymax = conf.high)) +
+  geom_pointrange() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(x = "Outcome Variables", y = "Estimate") +
+  theme_minimal() +
+  ggsave("results/further.pdf")
+
+
+
+#APPENDIX #not there yet either. But will end up managing.
+
+
+library(dplyr)
+library(ggplot2)
+library(broom)
 
 # Figure A2: YOLO Sampling and Sample Size
 n1 <- nrow(data)
 n2 <- nrow(data %>% filter(target == 1))
 cat(n2 / n1 * 100, "\n")
+
 n4 <- nrow(data %>% filter(target == 1 & bula_3rd %in% c(4, 13, 16) & year_3rd >= 2006 & year_3rd <= 2011))
 cat(n4 / n2 * 100, "\n")
+
 n5 <- nrow(data %>% filter(target == 1 & bula_3rd %in% c(4, 13, 16) & year_3rd >= 2006 & year_3rd <= 2011 & nonmiss == 1))
 cat(n5 / n4 * 100, "\n")
+
 n6 <- nrow(data %>% filter(target == 1 & bula_3rd %in% c(4, 13, 16) & year_3rd >= 2006 & year_3rd <= 2010 & nonmiss == 1))
 cat(n6 / n5 * 100, "\n")
 
 # A.4: Duration of survey in our sample
-ggplot(data %>% filter(eval(parse(text = sample))) %>% filter(eval(parse(text = yrs))), aes(x = duration)) +
-  geom_histogram() +
-  labs(title = "Duration of survey in our sample", y = "Frequency") +
+
+sample_data <- data %>% filter(bula_3rd %in% c(4, 13, 16) & target == 1 & nonmiss == 1 & year_3rd >= 2006 & year_3rd <= 2010)
+
+# A.4: Duration of survey in our sample
+ggplot(data %>% filter(sample == TRUE & yrs == TRUE), aes(x = duration)) +
+  geom_histogram(binwidth = 1, fill = "blue", alpha = 0.7) +
   theme_minimal() +
+  labs(x = "Duration", y = "Frequency") +
   ggsave("results/hist_dur.pdf")
 
+
 # Figure B1: Sports Disciplines for which Vouchers Were Redeemed
-table(data$v_560_2)
+vouchers <- data %>% count(v_560_2, sort = TRUE)
+print(vouchers)
 
 # Figure B2: Development of Outcome Variables—Synthetic Control Group
 # --> see 03_synthetic_control
 
 # Figure B3: Outcome Difference—Treatment vs. Control States
+years <- 2006:2010
+for (y in years) {
+  data <- data %>% mutate(!!paste0("t", y) := year_3rd == y & tbula_3rd == 1)
+}
 
+outcome_vars <- c("sportsclub", "oweight", "sport_hrs")
+for (x in outcome_vars) {
+  data <- data %>% mutate(!!x := !!sym(x) * 100)
+  model <- lm(as.formula(paste(x, "~ t2006 + t2007 + t2008 + t2009 + t2010 + year_3rd")), data = data %>% filter(sample & yrs))
+  results <- tidy(model, conf.int = TRUE)
+  
+  ggplot(results, aes(x = term, y = estimate, ymin = conf.low, ymax = conf.high)) +
+    geom_pointrange() +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    labs(x = "Year", y = "Estimate") +
+    theme_minimal() +
+    ggsave(paste0("results/diff_", x, ".pdf"))
+  
+  data <- data %>% mutate(!!x := !!sym(x) / 100)
+}
