@@ -4,6 +4,8 @@ library(ggplot2)
 library(foreign)
 library(tidyr)
 
+setwd(getwd())
+
 # Setting the specification
 sample <- "bula_3rd %in% c(4, 13, 16) & target == 1 & nonmiss == 1"
 yrs <- "year_3rd >= 2006 & year_3rd <= 2010"
@@ -22,7 +24,7 @@ fe_now <- c("year_3rd", "bula", "cityno")
 age <- "age >= 5 & age <= 12"
 
 # Load data
-data <- read.dta("${DATA_IN}MSZ_main-data.dta")
+data <- read_dta(file.path(DATA_IN, "MSZ_main-data.dta"))
 
 # Graphs: Main
 
