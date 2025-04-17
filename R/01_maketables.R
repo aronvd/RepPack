@@ -5,6 +5,7 @@ library(ggplot2)
 library(texreg)
 library(haven)
 library(stargazer)
+library(tidyr)
 
 
 # Define global variables
@@ -23,13 +24,32 @@ age <- "age >= 5 & age <= 12"
 # Read the .dta file using haven
 data <- read_dta(file.path(DATA_IN, "MSZ_main-data.dta"))
 
-# Table 1: Summary Statistics
+# Combine all variables for summary statistics
+all_vars <- c("age", "female", "urban", "academictrack", "newspaper", "art_at_home", out, "tbula_3rd", "treat")
+
+
+# Calculate summary statistics for all variables
 summary_stats <- data %>%
   filter(eval(parse(text = sample)) & eval(parse(text = yrs))) %>%
-  summarise(across(c("age", "female", "urban", "academictrack", "newspaper", "art_at_home", out), list(mean = mean, sd = sd, min = min, max = max)))
+  summarise(across(all_vars, list(mean = mean, sd = sd, min = min, max = max), na.rm = TRUE))
+
+#Renaming of variables with underscores to avoid problem with latter pivot longer function in the remaining
+summary_stats <- summary_stats %>%
+  rename_with(~ gsub("^art_at_home", "artathome", .x), starts_with("art_at_home")) %>%
+  rename_with(~ gsub("^sport_hrs", "sportshrs", .x), starts_with("sport_hrs")) %>%
+  rename_with(~ gsub("^tbula_3rd", "tbula3rd", .x), starts_with("tbula_3rd"))
+
+# Reshape summary statistics to a cleaner format
+summary_stats_clean <- summary_stats %>%
+  pivot_longer(cols = everything(), names_to = c("variable", ".value"), names_sep = "_") %>%
+  select(variable, mean, sd, min, max)
+
+# Convert summary_stats_clean to a regular data frame
+summary_stats_clean_df <- as.data.frame(summary_stats_clean)
 
 # Save summary statistics to a .tex file using stargazer
-stargazer(summary_stats, type = "latex", out = file.path(MY_TAB, "summary.tex"), summary = TRUE)
+stargazer(summary_stats_clean_df, type = "latex", out = file.path(MY_TAB, "summary.tex"), summary = FALSE, rownames = FALSE)
+
 
 # Table 2: Evaluation of Sports Club Voucher Program: Main DD Results
 results <- list()
@@ -79,6 +99,6 @@ stargazer(robust_results, type = "latex", out = file.path(MY_TAB, "robust_p1.tex
 # Additional tables and analyses can be translated similarly...
 
 # Close the log file
-sink()
+#sink()
 
 # Exit (not needed in R, script 
