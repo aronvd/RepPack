@@ -6,6 +6,8 @@ library(texreg)
 library(haven)
 library(stargazer)
 library(tidyr)
+library(lmtest)
+library(clubSandwich)
 
 
 # Define global variables
@@ -52,53 +54,153 @@ stargazer(summary_stats_clean_df, type = "latex", out = file.path(MY_TAB, "summa
 
 
 # Table 2: Evaluation of Sports Club Voucher Program: Main DD Results
-results <- list()
+
+# Create logical vector for sample & year filter
+filter_cond <- with(data, eval(parse(text = sample)) & eval(parse(text = yrs)))
+
+# Flattened model list and corresponding outcome labels
+model_list <- list()
+model_labels <- c()
+
 for (x in out) {
-  model1 <- lm(as.formula(paste(x, "~ treat + tbula_3rd + tcoh")), data = data, subset = eval(parse(text = sample)) & eval(parse(text = yrs)))
-  model2 <- lm(as.formula(paste(x, "~ treat + year_3rd + bula_3rd")), data = data, subset = eval(parse(text = sample)) & eval(parse(text = yrs)))
-  model3 <- lm(as.formula(paste(x, "~ treat + year_3rd + bula_3rd + cityno")), data = data, subset = eval(parse(text = sample)) & eval(parse(text = yrs)))
-  results[[x]] <- list(model1, model2, model3)
+  # Build models with factor() for categorical variables
+  model1 <- lm(as.formula(paste(x, "~ treat + tbula_3rd + tcoh")), data = data, subset = filter_cond)
+  model2 <- lm(as.formula(paste(x, "~ treat + factor(year_3rd) + factor(bula_3rd)")), data = data, subset = filter_cond)
+  model3 <- lm(as.formula(paste(x, "~ treat + factor(year_3rd) + factor(bula_3rd) + factor(cityno)")), data = data, subset = filter_cond)
+  
+  # Store all three models
+  model_list <- c(model_list, list(model1, model2, model3))
+  
+  # Label each block of models
+  model_labels <- c(model_labels, rep(x, 3))
 }
 
+# Group labels for each model in the table
+group_labels <- unique(model_labels)
+
+# Use stargazer to output LaTeX table (one long table with all models)
+stargazer(model_list,
+          type = "latex",
+          out = file.path(MY_TAB, "main.tex"),
+          star.cutoffs = c(0.1, 0.05, 0.01),
+          keep = "treat",
+          covariate.labels = c("Voucher"),
+          title = "Evaluation of Sports Club Voucher Program: Main DD Results",
+          column.labels = rep(c("Spec 1", "Spec 2", "Spec 3"), length(group_labels)),
+          column.separate = rep(3, length(group_labels)),
+          dep.var.labels.include = FALSE,
+          dep.var.labels = group_labels,
+          omit.stat = c("f", "ser", "adj.rsq", "rsq"),
+          no.space = TRUE
+)
 
 # Save main DD results to a .tex file using stargazer
 stargazer(results, type = "latex", out = file.path(MY_TAB, "main.tex"), star.cutoffs = c(0.1, 0.05, 0.01))
 
+#  Table 3: Sports Club Membership Across Child Ages
 
-# Table 3: Sports Club Membership Across Child Ages
-results_age <- list()
-for (x in c("ll6", "ll7", "ll8", "ll9", "ll10", "ll11", "ll12")) {
-  model <- lm(as.formula(paste(x, "~ treat + year_3rd + bula_3rd + cityno")), data = data, subset = eval(parse(text = sample)) & eval(parse(text = yrs)) & nonmiss_p == 1)
-  results_age[[x]] <- model
+# Flattened model list and corresponding outcome labels
+model_list <- list()
+model_labels <- c()
+
+# Define the filter conditions
+filter_cond <- with(data, eval(parse(text = sample)) & eval(parse(text = yrs)))
+filter_cond_restricted <- with(data, eval(parse(text = sample)) & eval(parse(text = yrs)) & nonmiss_p == 1)
+
+
+###1st column### (Suppressed section as regressions take a while)
+
+# # Initialize results table
+# results_all <- data.frame(Age = integer(), Coef = numeric(), SE = numeric(), N = integer(), stringsAsFactors = FALSE)
+# 
+# for (i in 6:12) {
+#   outcome_var <- paste0("LL_sport", i)
+#   formula_str <- paste(outcome_var, "~ treat + factor(year_3rd) + factor(bula_3rd) + factor(cityno)")
+# 
+#   # Subset data beforehand to keep everything consistent
+#   subset_data <- data[filter_cond, ]
+# 
+#   # Fit model on subset
+#   model <- lm(as.formula(formula_str), data = subset_data)
+# 
+#   # Compute clustered SEs using cityno from subset
+#   clustered_se <- coeftest(model, vcov = vcovCR(model, cluster = subset_data$cityno, type = "CR2"))
+# 
+#   # Extract and store
+#   coef_val <- clustered_se["treat", "Estimate"]
+#   se_val   <- clustered_se["treat", "Std. Error"]
+#   nobs     <- nobs(model)
+# 
+#   results_all <- rbind(
+#     results_all,
+#     data.frame(Age = i, Coef = round(coef_val, 3), SE = round(se_val, 3), N = nobs)
+#   )
+# }
+# 
+# print(results_all)
+
+
+###2nd column###
+
+# Initialize results table
+results_parentsample <- data.frame(Age = integer(), Coef = numeric(), SE = numeric(), N = integer(), stringsAsFactors = FALSE)
+
+for (i in 6:12) {
+  outcome_var <- paste0("LL_sport", i)
+  formula_str <- paste(outcome_var, "~ treat + factor(year_3rd) + factor(bula_3rd) + factor(cityno)")
+
+  # Subset data beforehand to keep everything consistent
+  #filter_cond_restricted <- with(data, eval(parse(text = sample)) & eval(parse(text = yrs)) & nonmiss_p == 1)
+  subset_data <- data[filter_cond_restricted, ]
+
+  # Fit model on subset
+  model <- lm(as.formula(formula_str), data = subset_data)
+
+  # Compute clustered SEs using cityno from subset
+  clustered_se <- coeftest(model, vcov = vcovCR(model, cluster = subset_data$cityno, type = "CR2"))
+
+  # Extract and store
+  coef_val <- clustered_se["treat", "Estimate"]
+  se_val   <- clustered_se["treat", "Std. Error"]
+  nobs     <- nobs(model)
+
+  results_parentsample <- rbind(
+    results_parentsample,
+    data.frame(Age = i, Coef = round(coef_val, 3), SE = round(se_val, 3), N = nobs)
+  )
 }
 
-# Save sports club membership results to a .tex file using stargazer
-stargazer(results_age, type = "latex", out = file.path(MY_TAB, "main_parents2.tex"), star.cutoffs = c(0.1, 0.05, 0.01))
+print(results_parentsample)
 
+###3rd Column###
+# Initialize results table
+results_restricted <- data.frame(Age = integer(), Coef = numeric(), SE = numeric(), N = integer(), stringsAsFactors = FALSE)
 
-# Table 4: Robustness
-robust_results <- list()
-for (x in out) {
-  model1 <- lm(as.formula(paste(x, "~ treat + year_3rd + bula_3rd + cityno")), data = data, subset = eval(parse(text = sample)) & year_3rd >= 2007 & year_3rd <= 2010)
-  model2 <- lm(as.formula(paste(x, "~ treat + year_3rd + bula_3rd + cityno")), data = data, subset = eval(parse(text = sample)) & year_3rd >= 2000 & year_3rd <= 2010)
-  model3 <- lm(as.formula(paste(x, "~ treat + year_3rd + bula_3rd + cityno")), data = data, subset = eval(parse(text = sample)) & year_3rd >= 2006 & year_3rd <= 2011)
-  model4 <- lm(as.formula(paste(x, "~ treat + year_3rd + bula_3rd + cityno")), data = data, subset = eval(parse(text = sample)) & year_3rd >= 2006 & year_3rd <= 2009)
-  model5 <- lm(as.formula(paste(x, "~ treat + year_3rd + bula_3rd + cityno")), data = data, subset = bula_3rd %in% c(13, 16) & eval(parse(text = yrs)) & target == 1 & nonmiss == 1)
-  model6 <- lm(as.formula(paste(x, "~ treat + year_3rd + bula_3rd + cityno")), data = data, subset = bula_3rd %in% c(4, 13) & eval(parse(text = yrs)) & target == 1 & nonmiss == 1)
-  model7 <- lm(as.formula(paste(x, "~ treat + year_3rd + bula_3rd + cityno")), data = data, subset = eval(parse(text = yrs)) & target == 1)
-  model8 <- lm(as.formula(paste(x, "~ treat + year_3rd + bula_3rd + cityno")), data = data, subset = eval(parse(text = yrs)) & eval(parse(text = sample)) & duration > 10 & duration < Inf & female_check == 1 & deutsch_check == 1 & dob_check == 1)
-  model9 <- lm(as.formula(paste(x, "~ treat + year_3rd + bula_3rd + cityno")), data = data, subset = eval(parse(text = yrs)) & eval(parse(text = sample)) & sib_part == 0 & year_3rd >= 2009 & year_3rd <= 2010)
-  model10 <- lm(as.formula(paste(x, "~ treat + year_3rd + bula_3rd + cityno")), data = data, subset = eval(parse(text = yrs)) & eval(parse(text = sample)) & anz_osiblings == 0)
-  robust_results[[x]] <- list(model1, model2, model3, model4, model5, model6, model7, model8, model9, model10)
+for (i in 6:12) {
+  outcome_var <- paste0("ll", i)
+  formula_str <- paste(outcome_var, "~ treat + factor(year_3rd) + factor(bula_3rd) + factor(cityno)")
+  
+  # Subset data beforehand to keep everything consistent
+  subset_data <- data[filter_cond_restricted, ]
+  
+  # Fit model on subset
+  model <- lm(as.formula(formula_str), data = subset_data)
+  
+  # Compute clustered SEs using cityno from subset
+  clustered_se <- coeftest(model, vcov = vcovCR(model, cluster = subset_data$cityno, type = "CR2"))
+  
+  # Extract and store
+  coef_val <- clustered_se["treat", "Estimate"]
+  se_val   <- clustered_se["treat", "Std. Error"]
+  nobs     <- nobs(model)
+  
+  results_restricted <- rbind(
+    results_restricted,
+    data.frame(Age = i, Coef = round(coef_val, 3), SE = round(se_val, 3), N = nobs)
+  )
 }
 
-# Save robustness results to a .tex file using stargazer
-stargazer(robust_results, type = "latex", out = file.path(MY_TAB, "robust_p1.tex"), star.cutoffs = c(0.1, 0.05, 0.01))
+print(results_restricted)
 
 
-# Additional tables and analyses can be translated similarly...
 
-# Close the log file
-#sink()
-
-# Exit (not needed in R, script 
