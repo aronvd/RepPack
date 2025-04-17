@@ -5,6 +5,7 @@ library(foreign)
 library(tidyr)
 library(dplyr)
 library(broom)
+library(patchwork)
 
 setwd(getwd())
 
@@ -32,21 +33,117 @@ data %>%
   theme_minimal() +
   ggsave("results/DiD_alt1.pdf")
 
-# Figure 2 : Hétérogénéité des effets
-hte <- c("female", "urban", "newspaper", "art_at_home", "academictrack", "sportsclub_4_7")
+# Figure 2 : Hétérogénéité des effet
+#########
+# Figure 2: Effect Heterogeneity
+# Figure 2: Effect Heterogeneity
+library(dplyr)
+library(ggplot2)
+library(coefplot)
 
-for (var in out) {
+
+
+results <- list()
+for (x in out) {
   for (group in hte) {
-    model <- lm(as.formula(paste(var, "~ treat *", group, "+ year_3rd + bula_3rd + cityno")), data = sample)
-    summary(model)
+    formula <- as.formula(paste(x, "~ treat *", group, "+ factor(year_3rd) *", group, "+ factor(bula_3rd) *", group, "+ factor(cityno)"))
+    model <- lm(formula, data = sample)
+    results[[paste(x, group, sep = "_")]] <- tidy(model)
   }
 }
 
-# Figure 3 : Hétérogénéité entre cohortes
-for (var in out) {
-  model <- lm(as.formula(paste(var, "~ t_2008 + t_2009 + t_2010 + year_3rd + bula_3rd + cityno")), data = sample)
-  summary(model)
+plot_list <- list()
+for (x in out) {
+  plot_data <- do.call(rbind, lapply(hte, function(group) {
+    result <- results[[paste(x, group, sep = "_")]]
+    result <- result %>% filter(term == paste("treat:", group, sep = ""))
+    result$group <- group
+    return(result)
+  }))
+  
+  p <- ggplot(plot_data, aes(x = group, y = estimate)) +
+    geom_point() +
+    geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    labs(x = "", y = "Effect Size") +
+    theme_minimal()
+  
+  plot_list[[x]] <- p
 }
+
+
+for (x in out) {
+  ggsave(filename = paste0("hte_", x, ".pdf"), plot = plot_list[[x]])
+}
+
+
+combined_plot_fig2 <- plot_list[[1]] + plot_list[[2]] + plot_list[[3]] + 
+  plot_list[[4]] + plot_list[[5]] + plot_list[[6]] +
+  plot_layout(ncol = 2) # Adjust the layout as needed
+
+# Display the combined plot
+print(combined_plot)
+
+ggsave(filename = "combined_plot_fig2.pdf", plot = combined_plot_fig2, width = 10, height = 8)
+
+
+# Figure 3: Heterogeneity across Cohorts
+
+
+filtered_data <- data %>%
+  filter(bula_3rd %in% c(4, 13, 16) & target == 1 & nonmiss == 1 & year_3rd >= 2006 & year_3rd <= 2010)
+
+outcomes <- c("kommheard", "kommgotten", "kommused", "sportsclub", "sport_hrs", "oweight")
+controls <- c("female", "siblings", "born_germany", "parent_nongermany", "newspaper", "art_at_home", "academictrack", "sportsclub_4_7", "music_4_7")
+further <- c("sport1hrs", "sport2hrs", "sport3hrs", "sport_alt2", "health1", "obese", "eversmoked", "currentsmoking", "everalc", "alclast7")
+hte <- c("female", "urban", "newspaper", "art_at_home", "academictrack", "sportsclub_4_7")
+fe3 <- c("year_3rd", "bula_3rd", "cityno")
+fe1 <- c("year_1st", "bula_1st", "cityno")
+fe_now <- c("year_3rd", "bula", "cityno")
+age <- c(5, 12)
+
+
+##run reg 
+results <- list()
+for (outcome in outcomes) {
+  model <- lm(as.formula(paste(outcome, "~ t_2008 + t_2009 + t_2010 + year_3rd + bula_3rd + cityno")), data = filtered_data)
+  results[[outcome]] <- tidy(model)
+}
+
+#plotcoeff 
+
+plot_list <- list()
+for (outcome in outcomes) {
+  p <- ggplot(results[[outcome]], aes(x = term, y = estimate)) +
+    geom_point() +
+    geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error)) +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    scale_y_continuous(limits = c(-0.2, 0.4)) +
+    scale_x_discrete(labels = c("1st cohort", "2nd cohort", "3rd cohort")) +
+    theme_minimal() +
+    labs(title = outcome)
+  plot_list[[outcome]] <- p
+}
+
+#save 
+
+for (outcome in outcomes) {
+  ggsave(filename = paste0("event_", outcome, ".pdf"), plot = plot_list[[outcome]])
+}
+
+combined_plot_fig3 <- plot_list[[1]] + plot_list[[2]] + plot_list[[3]] + 
+  plot_list[[4]] + plot_list[[5]] + plot_list[[6]] +
+  plot_layout(ncol = 2) # Adjust the layout as needed
+
+# Display the combined plot
+
+
+ggsave(filename = "combined_plot_fig3.pdf", plot = combined_plot_fig3, width = 10, height = 8)
+
+########
+
+
+
 
 # Figure 4 : Adhésion au club de sport par âge
 
@@ -91,7 +188,7 @@ data_collapsed <- data_long %>% group_by(tbula, tyear, age) %>% summarise(
 )
 
 
-# Plot Figure 4 without faceting
+# Plot Figure 4 with faceting
 
 ggplot(data_collapsed, aes(x = age, y = LL_sport, color = factor(tbula))) +
   geom_point() +
