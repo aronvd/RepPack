@@ -22,16 +22,16 @@ dir.create(MY_TAB, showWarnings = FALSE)
 # .libPaths(new = c(MY_PATH, .libPaths()))
 
 # Start the log file
-datetime <- format(Sys.time(), "%Y.%m.%d-%H.%M.%S")
-logfile <- file.path(MY_PATH, "log", paste0("v_", datetime, ".log.txt"))
-sink(logfile, append = TRUE)
+#datetime <- format(Sys.time(), "%Y.%m.%d-%H.%M.%S")
+#logfile <- file.path(MY_PATH, "log", paste0("v_", datetime, ".log.txt"))
+#sink(logfile, append = TRUE)
 
 # Perform main analyses
 source(file.path(R, "01_maketables.R"))
-source(file.path(R, "02_makegraphs.R"))
-source(file.path(R, "03_synthetic_control.R"))
+#source(file.path(R, "02_makegraphs.R"))
+#source(file.path(R, "03_synthetic_control.R"))
 
 # Close the log file
-sink()
+#sink()
 
 # Exit (not needed in R, script ends here)
