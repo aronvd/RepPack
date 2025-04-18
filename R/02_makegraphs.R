@@ -288,6 +288,33 @@ ggplot(clubs_data, aes(x = sparten_cat)) +
   theme_minimal() +
   ggsave("results/divisions.pdf")
 
+
+##6 1 single PDF : 
+library(ggplot2)
+library(cowplot)
+
+# Create the first plot
+p1 <- ggplot(clubs_data, aes(x = vereine_cat)) +
+  geom_histogram(binwidth = 1, fill = "black", aes(y = ..density..)) +
+  scale_x_continuous(breaks = 0:7, labels = c("0", "1-5", "6-10", "11-15", "16-20", "21-30", "31-40", ">40")) +
+  labs(y = "Proportion", x = "Sports clubs per ZIP code") +
+  theme_minimal()
+
+# Create the second plot
+p2 <- ggplot(clubs_data, aes(x = sparten_cat)) +
+  geom_histogram(binwidth = 1, fill = "black", aes(y = ..density..)) +
+  scale_x_continuous(breaks = 0:7, labels = c("0", "1-10", "11-20", "21-30", "31-40", "41-50", "51-60", ">60")) +
+  labs(y = "Proportion", x = "Sports club disciplines per ZIP code") +
+  theme_minimal()
+
+# Combine the plots into a single PDF
+combined_plot <- plot_grid(p1, p2, ncol = 1)
+ggsave("results/combined_plots_6.pdf", combined_plot)
+
+
+
+
+
 #7 Figure 7: Further Outcomes
 
 # Load necessary libraries
@@ -416,3 +443,4 @@ for (x in outcome_vars) {
   
   data <- data %>% mutate(!!x := !!sym(x) / 100)
 }
+
