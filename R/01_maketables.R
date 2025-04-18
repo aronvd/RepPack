@@ -29,7 +29,6 @@ data <- read_dta(file.path(DATA_IN, "MSZ_main-data.dta"))
 # Combine all variables for summary statistics
 all_vars <- c("age", "female", "urban", "academictrack", "newspaper", "art_at_home", out, "tbula_3rd", "treat")
 
-
 # Calculate summary statistics for all variables
 summary_stats <- data %>%
   filter(eval(parse(text = sample)) & eval(parse(text = yrs))) %>%
